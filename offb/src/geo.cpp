@@ -52,7 +52,7 @@ geometry_msgs::Point desired_velocity;
 geometry_msgs::Point feedforward;
 
 sensor_msgs::Imu imu_data;
-void imu1_cb(const sensor_msgs::Imu::ConstPtr& msg){
+void imu1_cb(const sensor_msgs::Imu: :ConstPtr& msg){
   imu_data = *msg;
 
   double w,x,y,z;
@@ -62,10 +62,12 @@ void imu1_cb(const sensor_msgs::Imu::ConstPtr& msg){
   w = imu_data.orientation.w;
   tf::Quaternion Q(x, y, z, w);
   tf::Matrix3x3(Q).getRPY(payload_roll, payload_pitch, payload_yaw);
+  //get raw pitch yaw
 
   payload_Rotation << w*w+x*x-y*y-z*z ,     2*x*y-2*w*z ,     2*x*z+2*w*y,
                           2*x*y+2*w*z , w*w-x*x+y*y-z*z ,     2*y*z-2*w*x,
                           2*x*z-2*w*y ,     2*y*z+2*w*x , w*w-x*x-y*y+z*z;
+  //use imu_data to calculate rotation matrix(body frame to world frame)
 
   R_pl_B << cos(payload_yaw), sin(payload_yaw),   0,
            -sin(payload_yaw), cos(payload_yaw),   0,
@@ -121,15 +123,15 @@ Eigen::Vector3d nonholonomic_output(double x_r, double y_r, double theta_r, doub
 
   Eigen::Vector3d output;
   Eigen::Vector3d err_state_B;
-  err_state << x_r - pc2_est(0), y_r - pc2_est(1), theta_r - payload_yaw; // +(PI/2);
+  err_state << x_r - pc2_est(0), y_r - pc2_est(1), theta_r - payload_yaw; // +(PI/2);(5)(6)
   err_state_B = R_pl_B * err_state;
 
-  x_e = err_state_B(0);  //err_state_B.norm();       //err_state_B.norm();
-  y_e = err_state_B(1);  //err_state_B.norm();       //err_state_B.norm();
+  x_e = err_state_B(0);  //err_state_B.norm();
+  y_e = err_state_B(1);  //err_state_B.norm();
   theta_e = err_state(2);
 
-  double vd = v_r*cos(theta_e) + 1.0*x_e;  // 0.3
-  double w_d = w_r + v_r*5.0*y_e + 3.0*sin(theta_e);
+  double vd = v_r*cos(theta_e) + 1.0*x_e;   //(43) k1
+  double w_d = w_r + v_r*5.0*y_e + 3.0*sin(theta_e);    //k2 k3
 
   output << vd, w_d, 0;
   return output;
@@ -202,7 +204,7 @@ int main(int argc, char **argv){
     p8.acc << 0,0,0;
     p8.yaw = 0;
 
-  path.push_back(segments(p1,p2,16.0));
+  path.push_back(segments(p1,p2,16.0));//16sec
   path.push_back(segments(p2,p3,16.0));
   path.push_back(segments(p3,p4,16.0));
   path.push_back(segments(p4,p5,16.0));
@@ -211,7 +213,7 @@ int main(int argc, char **argv){
   path.push_back(segments(p7,p8,16.0));
   data = plan.get_profile(path,path.size(),0.02);
 
-  desired_pose.pose.position.x = 0.9;
+  desired_pose.pose.position.x = 0.9;//?
   desired_pose.pose.position.y = 0.0;
   desired_pose.pose.position.z = 1.3;
 
