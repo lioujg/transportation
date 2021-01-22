@@ -16,23 +16,22 @@
 #include <nav_msgs/Odometry.h>
 
 #define normal
-#define PI 3.14159
+#define PI 3.1415926
 
-double k1 = 3.0, k2 = 1.0, k3 = 5.0, k4 = 3.0, kv = 5.0, kw = 11.0;
+double k1 = 1.0, k2 = 2.0, k3 = 1.0, kv = 2.5, kw = 7.0;
 double mp = 0.5, L = 1.0, g = 9.8, Izz = mp*L*L/12;
 
 geometry_msgs::PoseStamped leader_pose;
 geometry_msgs::TwistStamped leader_vel;
-Eigen::Vector3d pose, vel, ang, test;
+Eigen::Vector3d pose, vel, ang;
 Eigen::Vector4d ori;
-Eigen::Vector3d v_p, w_pl_B;
-Eigen::Vector3d T_F(0, 0, 0.5*(mp*g)), T_L(0, 0, 0);
-Eigen::Vector3d r_c2_p(0.5, 0, 0);
+Eigen::Vector3d v_p;
+Eigen::Vector3d FL_des;
+Eigen::Vector3d r_p_c2(-0.5, 0, 0);
 double vir_x, vir_y, theta_r, vx, vy, ax, ay, jx, jy;
 double last_w = 0.0;
 
 double payload_roll, payload_yaw, payload_pitch;
-Eigen::Matrix3d payload_Rotation;
 Eigen::Vector3d v_w_eta;
 Eigen::Vector3d pc2_est;
 
@@ -43,7 +42,7 @@ bool flag = false;
 
 Eigen::Matrix3d R_pl_B;
 Eigen::Matrix3d uav_rotation;
-Eigen::Vector3d w_c1_I;
+Eigen::Vector3d w_;
 
 geometry_msgs::PoseStamped desired_pose;
 geometry_msgs::Point record_pose;
@@ -64,11 +63,14 @@ void imu1_cb(const sensor_msgs::Imu: :ConstPtr& msg){
   tf::Matrix3x3(Q).getRPY(payload_roll, payload_pitch, payload_yaw);
   //get raw pitch yaw
 
+//<<<<<<< HEAD
   payload_Rotation << w*w+x*x-y*y-z*z ,     2*x*y-2*w*z ,     2*x*z+2*w*y,
                           2*x*y+2*w*z , w*w-x*x+y*y-z*z ,     2*y*z-2*w*x,
                           2*x*z-2*w*y ,     2*y*z+2*w*x , w*w-x*x-y*y+z*z;
   //use imu_data to calculate rotation matrix(body frame to world frame)
 
+//=======
+//>>>>>>> bitch/main
   R_pl_B << cos(payload_yaw), sin(payload_yaw),   0,
            -sin(payload_yaw), cos(payload_yaw),   0,
                            0,                0,   1;
@@ -78,14 +80,13 @@ void imu1_cb(const sensor_msgs::Imu: :ConstPtr& msg){
          imu_data.angular_velocity.y,
          imu_data.angular_velocity.z;
 
-  test = tmp;
-  w_c1_I = payload_Rotation * tmp;
+  w_ << 0, 0, tmp(2);
 }
 
 void est_vel_cb(const geometry_msgs::Point::ConstPtr& msg){
   Eigen::Vector3d vc1 = Eigen::Vector3d(msg->x, msg->y, msg->z);
   Eigen::Vector3d r_c1p = Eigen::Vector3d(-0.5, 0.0, 0.0);
-  v_p = vc1 + w_c1_I.cross(r_c1p);
+  v_p = R_pl_B*vc1; // + w_.cross(r_c1p);
 }
 
 void pc2_cb(const geometry_msgs::Point::ConstPtr& msg){
@@ -126,12 +127,21 @@ Eigen::Vector3d nonholonomic_output(double x_r, double y_r, double theta_r, doub
   err_state << x_r - pc2_est(0), y_r - pc2_est(1), theta_r - payload_yaw; // +(PI/2);(5)(6)
   err_state_B = R_pl_B * err_state;
 
+<<<<<<< HEAD
   x_e = err_state_B(0);  //err_state_B.norm();
   y_e = err_state_B(1);  //err_state_B.norm();
   theta_e = err_state(2);
 
   double vd = v_r*cos(theta_e) + 1.0*x_e;   //(43) k1
   double w_d = w_r + v_r*5.0*y_e + 3.0*sin(theta_e);    //k2 k3
+=======
+  x_e = err_state_B(0);
+  y_e = err_state_B(1);
+  theta_e = err_state(2);
+
+  double vd = v_r*cos(theta_e) + k1*x_e;
+  double w_d = w_r + v_r*k2*y_e + k3*sin(theta_e);
+>>>>>>> bitch/main
 
   output << vd, w_d, 0;
   return output;
@@ -141,7 +151,6 @@ int main(int argc, char **argv){
 
   ros::init(argc, argv, "geo");
   ros::NodeHandle nh;
-  ROS_INFO("Hello world!");
 
   ros::Publisher feedforward_pub = nh.advertise<geometry_msgs::Point>("/feedforward",2);
   ros::Publisher desired_pose_pub = nh.advertise<geometry_msgs::Point>("/drone1/desired_position",2);
@@ -249,30 +258,24 @@ int main(int argc, char **argv){
       }
 
       Eigen::Vector3d alpha;
-      alpha << 0, 0, (test(2) - last_w)/0.02;
-      last_w = test(2);
+      alpha << 0, 0, (w_(2) - last_w)/0.02;
+      last_w = w_(2);
 
       double w_r = (ay*vx - ax*vy)/(vx*vx + vy*vy); //(theta_r - last_theta_r) /(0.02) ;
       double vr = sqrt(vx*vx + vy*vy);
 
       Eigen::Vector3d nonholoutput = nonholonomic_output(vir_x, vir_y, theta_r, vr, w_r);
       double vr_dot = sqrt(ax*ax + ay*ay);
-      double theta_e_dot = w_r - test(2);  //the error of the angular velocity
-      double x_e_dot = test(2) * y_e + vr*cos(theta_e) - v_w_eta(0); //- v_w_eta(0)
-      double y_e_dot = - test(2) * x_e + vr*sin(theta_e);
+      double theta_e_dot = w_r - w_(2);  //the error of the angular velocity
+      double x_e_dot = w_(2) * y_e + vr*cos(theta_e) - v_w_eta(0);
+      double y_e_dot = - w_(2) * x_e + vr*sin(theta_e);
       double w_r_dot = (jy*vx - jx*vy)/(vr*vr) - (2*vr_dot*w_r)/vr;
-      double w_d_dot = w_r_dot + vr_dot*1.0*y_e + vr*1.0*y_e_dot + 1.0*theta_e_dot*cos(theta_e);
-      double vd_dot = vr_dot*cos(theta_e) - vr*theta_e_dot*sin(theta_e) + 1.0*x_e_dot;
+      double w_d_dot = w_r_dot + vr_dot*k2*y_e + vr*k2*y_e_dot + k3*theta_e_dot*cos(theta_e);
+      double vd_dot = vr_dot*cos(theta_e) - vr*theta_e_dot*sin(theta_e) + k1*x_e_dot;
 
-      Eigen::Vector3d omega_m(0 , 0 , test(2));
       Eigen::Vector3d nonlinearterm;
 
-      //nonlinearterm =omega_m.cross(omega_m.cross(r_c2_p));
-
-      nonlinearterm = R_pl_B*(omega_m.cross(v_p)) - alpha.cross(r_c2_p) - omega_m.cross(omega_m.cross(r_c2_p));
-
-      //  R_-1 * omega x v - omega_dot x rcp - omega x (omega x r)
-      Eigen::Vector3d FL_des;
+      nonlinearterm = w_.cross(v_p) - alpha.cross(r_p_c2) - w_.cross(w_.cross(r_p_c2));
 
       if( nonholoutput(0) > 10 ){
         nonholoutput(0) = 10;
@@ -281,12 +284,9 @@ int main(int argc, char **argv){
       Eigen::Vector3d tmp;
       Eigen::Vector3d cmd_;
 
-      tmp << 4.0 * (nonholoutput(0) - v_w_eta(0)) + x_e + nonlinearterm(0) + vd_dot,
-             7.0 * (nonholoutput(1) - v_w_eta(2)) + 4.0*sin(theta_e)/1.0 + w_d_dot,   //ffy is close to zero.
+      tmp << kv * (nonholoutput(0) - v_w_eta(0)) + x_e + nonlinearterm(0) + vd_dot,
+             kw * (nonholoutput(1) - v_w_eta(2)) + sin(theta_e)/k2 + w_d_dot,   //ffy is close to zero.
              0;
-      // tmp <<  6 * (nonholoutput(0) - v_w_eta(0)) + x_e + nonlinearterm(0) + vd_dot ,
-      //         12.0 * (nonholoutput(1)-v_w_eta(2))   + 5.5*sin(theta_e)/1.0  +w_d_dot,   //ffy is close to zero.
-      //         0;
 
       Eigen::Matrix3d M;
       M <<   mp,        0,    0,
@@ -299,12 +299,11 @@ int main(int argc, char **argv){
 
       FL_des(0) = cmd_(0);   // + nonlinearterm(0);// + vd_dot ;
       FL_des(1) = cmd_(1);   // + w_d_dot;
-      FL_des(2) = 1.0*(1.3 - pose(2)) + 0.6*(0 - vel(2));
+      FL_des(2) = 1.0*(desired_pose.pose.position.z - pose(2)) + 0.6*(0 - vel(2)) + mp*g/2.0;
 
-      T_L = T_F + FL_des;
-      desired_force.x = T_L(0);
-      desired_force.y = T_L(1);
-      desired_force.z = T_L(2);
+      desired_force.x = FL_des(0);
+      desired_force.y = FL_des(1);
+      desired_force.z = FL_des(2);
 
       desired_velocity.x = vr;
       desired_velocity.y = w_r;
@@ -313,9 +312,9 @@ int main(int argc, char **argv){
       feedforward.y = vd_dot;
       feedforward.z = w_d_dot;
 
-      force.pose.position.x = T_L(0);
-      force.pose.position.y = T_L(1);
-      force.pose.position.z = T_L(2);
+      force.pose.position.x = FL_des(0);
+      force.pose.position.y = FL_des(1);
+      force.pose.position.z = FL_des(2);
      }
 
      traj_pub.publish(force);
