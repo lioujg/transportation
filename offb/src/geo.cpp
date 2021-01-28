@@ -51,7 +51,7 @@ geometry_msgs::Point desired_velocity;
 geometry_msgs::Point feedforward;
 
 sensor_msgs::Imu imu_data;
-void imu1_cb(const sensor_msgs::Imu: :ConstPtr& msg){
+void imu1_cb(const sensor_msgs::Imu::ConstPtr& msg){
   imu_data = *msg;
 
   double w,x,y,z;
@@ -64,9 +64,9 @@ void imu1_cb(const sensor_msgs::Imu: :ConstPtr& msg){
   //get raw pitch yaw
 
 //<<<<<<< HEAD
-  payload_Rotation << w*w+x*x-y*y-z*z ,     2*x*y-2*w*z ,     2*x*z+2*w*y,
-                          2*x*y+2*w*z , w*w-x*x+y*y-z*z ,     2*y*z-2*w*x,
-                          2*x*z-2*w*y ,     2*y*z+2*w*x , w*w-x*x-y*y+z*z;
+//  payload_Rotation << w*w+x*x-y*y-z*z ,     2*x*y-2*w*z ,     2*x*z+2*w*y,
+//                          2*x*y+2*w*z , w*w-x*x+y*y-z*z ,     2*y*z-2*w*x,
+//                          2*x*z-2*w*y ,     2*y*z+2*w*x , w*w-x*x-y*y+z*z;
   //use imu_data to calculate rotation matrix(body frame to world frame)
 
 //=======
@@ -127,21 +127,12 @@ Eigen::Vector3d nonholonomic_output(double x_r, double y_r, double theta_r, doub
   err_state << x_r - pc2_est(0), y_r - pc2_est(1), theta_r - payload_yaw; // +(PI/2);(5)(6)
   err_state_B = R_pl_B * err_state;
 
-<<<<<<< HEAD
   x_e = err_state_B(0);  //err_state_B.norm();
   y_e = err_state_B(1);  //err_state_B.norm();
   theta_e = err_state(2);
 
   double vd = v_r*cos(theta_e) + 1.0*x_e;   //(43) k1
   double w_d = w_r + v_r*5.0*y_e + 3.0*sin(theta_e);    //k2 k3
-=======
-  x_e = err_state_B(0);
-  y_e = err_state_B(1);
-  theta_e = err_state(2);
-
-  double vd = v_r*cos(theta_e) + k1*x_e;
-  double w_d = w_r + v_r*k2*y_e + k3*sin(theta_e);
->>>>>>> bitch/main
 
   output << vd, w_d, 0;
   return output;
@@ -153,17 +144,18 @@ int main(int argc, char **argv){
   ros::NodeHandle nh;
 
   ros::Publisher feedforward_pub = nh.advertise<geometry_msgs::Point>("/feedforward",2);
-  ros::Publisher desired_pose_pub = nh.advertise<geometry_msgs::Point>("/drone1/desired_position",2);
+  ros::Publisher desired_pose_pub = nh.advertise<geometry_msgs::Point>("/drone1/desired_position",2);//QP
   ros::Publisher desired_force_pub = nh.advertise<geometry_msgs::Point>("/desired_force",2);
   ros::Publisher desired_velocity_pub = nh.advertise<geometry_msgs::Point>("/desired_velocity",2);
   ros::Publisher traj_pub = nh.advertise<geometry_msgs::PoseStamped>("/firefly1/command/pose",2);
+
   ros::Subscriber odom_sub = nh.subscribe<nav_msgs::Odometry>("/firefly1/odometry_sensor1/odometry", 3,odom_cb);
   ros::Subscriber est_vel_sub = nh.subscribe<geometry_msgs::Point>("est_vel",3,est_vel_cb);
   ros::Subscriber imu1_sub = nh.subscribe("/payload/IMU1",2,imu1_cb);
   ros::Subscriber pc2_sub = nh.subscribe("pointpc2",2,pc2_cb);
   ros::Subscriber eta_sub = nh.subscribe("pointvc2",2,eta_cb);
 
-  ros::Rate loop_rate(50.0);
+  ros::Rate loop_rate(50.0);    //frequency
   nh.setParam("/start",false);
   geometry_msgs::PoseStamped force;
 
@@ -226,7 +218,7 @@ int main(int argc, char **argv){
   desired_pose.pose.position.y = 0.0;
   desired_pose.pose.position.z = 1.3;
 
-  while(ros::ok()){
+  while(ros::ok()){     //loop (spinOnce)
 
     nh.getParam("/start",flag);
 
@@ -251,7 +243,7 @@ int main(int argc, char **argv){
       jx = data[tick].jerk(0);
       jy = data[tick].jerk(1);
 
-      theta_r = atan2( data[tick].vel(1),data[tick].vel(0) );
+      theta_r = atan2( data[tick].vel(1),data[tick].vel(0) );   //(4)
 
       if(theta_r <0){
         theta_r += 2*PI;
@@ -261,31 +253,32 @@ int main(int argc, char **argv){
       alpha << 0, 0, (w_(2) - last_w)/0.02;
       last_w = w_(2);
 
-      double w_r = (ay*vx - ax*vy)/(vx*vx + vy*vy); //(theta_r - last_theta_r) /(0.02) ;
+      double w_r = (ay*vx - ax*vy)/(vx*vx + vy*vy); //(theta_r - last_theta_r) /(0.02) ???;
       double vr = sqrt(vx*vx + vy*vy);
 
-      Eigen::Vector3d nonholoutput = nonholonomic_output(vir_x, vir_y, theta_r, vr, w_r);
+      Eigen::Vector3d nonholoutput = nonholonomic_output(vir_x, vir_y, theta_r, vr, w_r);   //vd, w_d, 0
       double vr_dot = sqrt(ax*ax + ay*ay);
       double theta_e_dot = w_r - w_(2);  //the error of the angular velocity
-      double x_e_dot = w_(2) * y_e + vr*cos(theta_e) - v_w_eta(0);
-      double y_e_dot = - w_(2) * x_e + vr*sin(theta_e);
-      double w_r_dot = (jy*vx - jx*vy)/(vr*vr) - (2*vr_dot*w_r)/vr;
-      double w_d_dot = w_r_dot + vr_dot*k2*y_e + vr*k2*y_e_dot + k3*theta_e_dot*cos(theta_e);
+      double x_e_dot = w_(2) * y_e + vr*cos(theta_e) - v_w_eta(0);  //(58)
+      double y_e_dot = - w_(2) * x_e + vr*sin(theta_e);  //(58)
+      double w_r_dot = (jy*vx - jx*vy)/(vr*vr) - (2*vr_dot*w_r)/vr;     //vr^(-3) ??
+      double w_d_dot = w_r_dot + vr_dot*k2*y_e + vr*k2*y_e_dot + k3*theta_e_dot*cos(theta_e);   //take (43) time derivative
       double vd_dot = vr_dot*cos(theta_e) - vr*theta_e_dot*sin(theta_e) + k1*x_e_dot;
 
       Eigen::Vector3d nonlinearterm;
 
-      nonlinearterm = w_.cross(v_p) - alpha.cross(r_p_c2) - w_.cross(w_.cross(r_p_c2));
+      nonlinearterm = w_.cross(v_p) - alpha.cross(r_p_c2) - w_.cross(w_.cross(r_p_c2)); //the last term of (41)
 
-      if( nonholoutput(0) > 10 ){
+      if( nonholoutput(0) > 10 ){   //vd
         nonholoutput(0) = 10;
       }
 
       Eigen::Vector3d tmp;
       Eigen::Vector3d cmd_;
 
+      //(41)(42) separately
       tmp << kv * (nonholoutput(0) - v_w_eta(0)) + x_e + nonlinearterm(0) + vd_dot,
-             kw * (nonholoutput(1) - v_w_eta(2)) + sin(theta_e)/k2 + w_d_dot,   //ffy is close to zero.
+             kw * (nonholoutput(1) - v_w_eta(2)) + sin(theta_e)/k2 + w_d_dot,   //+0    ffy is close to zero.
              0;
 
       Eigen::Matrix3d M;
@@ -306,7 +299,7 @@ int main(int argc, char **argv){
       desired_force.z = FL_des(2);
 
       desired_velocity.x = vr;
-      desired_velocity.y = w_r;
+      desired_velocity.y = w_r; //put w into y
 
       feedforward.x = nonlinearterm(0);
       feedforward.y = vd_dot;

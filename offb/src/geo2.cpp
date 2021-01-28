@@ -53,7 +53,7 @@ void model_cb(const gazebo_msgs::LinkStates::ConstPtr& msg){
 
     for(unsigned int i=0; i<links.name.size(); i++){
 
-      if (links.name[i].compare("payload::payload_rec_g_box") == 0 ){
+      if (links.name[i].compare("payload::payload_rec_g_box") == 0 ){   //links.name = payload::payload_rec_g_box
         Eigen::Vector3d vec;
         double w,x,y,z;
 
@@ -101,9 +101,10 @@ void est_force_cb(const geometry_msgs::Point::ConstPtr& msg){
   FF_I << est_force.x, est_force.y, est_force.z;
 
   p_F_c2 = pose - uav_rotation * Eigen::Vector3d(0, 0, 0.05);  // offset x from uav to connector
-  p_c2 = p_F_c2 + (FF_I/FF_I.norm()) * length;
+  p_c2 = p_F_c2 + (FF_I/FF_I.norm()) * length;  // (38) pc2 version "-"??   the estimated force is the payload pull the UAV
 
-  payload_yaw = atan2( tmpy - last_tmp_y, tmpx - last_tmp_x);
+  payload_yaw = atan2(tmpy - last_tmp_y, tmpx - last_tmp_x);        //(4)
+  // tmpy is y-position of c2
 
   if(payload_yaw < 0){
     payload_yaw += 2*PI;
@@ -111,7 +112,7 @@ void est_force_cb(const geometry_msgs::Point::ConstPtr& msg){
 
   payload_Rotation << cos(payload_yaw),  -sin(payload_yaw),   0,
                       sin(payload_yaw),   cos(payload_yaw),   0,
-                                     0,                  0,   1;
+                                     0,                  0,   1;    //inertial to body(?
 
   //change the force from inertial frame to body.
   if((count_ %1 == 0) && (pos_x_buffer.size()>7)){
@@ -150,7 +151,7 @@ void est_force_cb(const geometry_msgs::Point::ConstPtr& msg){
     pos_x_buffer.pop();
 
     tx << t1, t2, t3, t4, t5, t6, t7;
-    coeff_x = (w.transpose() * w).inverse() * w.transpose()*tx;
+    coeff_x = (w.transpose() * w).inverse() * w.transpose()*tx; // Calculate the pseude-inverse of w
 
     t1 = pos_y_buffer.front();
     pos_y_buffer.pop();
@@ -189,7 +190,7 @@ void est_force_cb(const geometry_msgs::Point::ConstPtr& msg){
 
     Eigen::Vector3d offset_b = payload_Rotation*(FF_I/FF_I.norm()) * length;
 
-    r = (v*v*v)/fabs(vx*ay - vy*ax);
+    r = (v*v*v)/fabs(vx*ay - vy*ax);    //The absolute value of vx*ay - vy*ax
     an = (v*v)/r;
     Fn = mp/2 * an;
 
@@ -201,7 +202,8 @@ void est_force_cb(const geometry_msgs::Point::ConstPtr& msg){
       Fn = Fn * -1.0;
     }
 
-    command = mF*(bd*(-vb(1)) - kd*dy)/Md + fy + Fn;
+    command = mF*(bd*(-vb(1)) - kd*dy)/Md - fy + Fn;    //desired y is 0
+    //command = mF*(bd*(-vb(1)) - kd*dy)/Md + Fn;    //desired y is 0
 
     kappa.x = r;
     kappa.y = Fn;
@@ -245,7 +247,7 @@ void odom_cb(const nav_msgs::Odometry::ConstPtr& msg){
 
 geometry_msgs::Point force2;
 Eigen::Vector3d a_, b_;
-void force2_cb(const geometry_msgs::WrenchStamped::ConstPtr& msg){
+void force2_cb(const geometry_msgs::WrenchStamped::ConstPtr& msg){  //??
   b_ << msg -> wrench.force.x, msg -> wrench.force.y, msg -> wrench.force.z;
   a_ = payload_rotation_truth * b_;
 
@@ -286,23 +288,23 @@ int main(int argc, char **argv){
     nh.getParam("/force_control",force_control);
 
     double ft = sqrt(FF_I(0)*FF_I(0) + FF_I(1)*FF_I(1));
-    if((ft>0.3)){
+    if((ft>0.3)){       //(45)
       triggered = true;
     }
     else if((triggered)&&((ft<0.3)&&(ft>0.2))){
       triggered = true;
     }
-    else{
+    else{       //(46)
       triggered = false;
     }
 
-    if((triggered) && (force_control)){
+    if((triggered) && (force_control)){     //(47)upper
       Eigen::Vector3d a, ab;
 
       FF_B = payload_Rotation * FF_I;
       vb = payload_Rotation * vel;
 
-      ab <<                           (0 - vb(0)) + (FF_B(0))/3.0,
+      ab <<                           (0 - vb(0)) + (FF_B(0))/3.0,      //FF_B is estimated
                                                command,
             5.0*(desired_pose.pose.position.z - pose(2)) + 2.0*(0 - vel(2)) + 0.5*mp*g;
       a = payload_Rotation.transpose()*ab;
@@ -315,7 +317,7 @@ int main(int argc, char **argv){
 
       trigger.x = 1;
     }
-    else{
+    else{       //(47)lower
       force.pose.position.x = 3*(desired_pose.pose.position.x - pose(0)) + 1*(0 - vel(0));
       force.pose.position.y = 3*(desired_pose.pose.position.y - pose(1)) + 1*(0 - vel(1));
       force.pose.position.z = 3*(desired_pose.pose.position.z - pose(2)) + 1*(0 - vel(2)) + 0.5*mp*g;
@@ -323,7 +325,7 @@ int main(int argc, char **argv){
       trigger.x = 0;
     }
 
-    trigger.y = ft;
+    trigger.y = ft; //magnitude of force
 
     traj_pub.publish(force);
     trigger_pub.publish(trigger);
