@@ -269,7 +269,7 @@ int main(int argc, char **argv){
 
       nonlinearterm = w_.cross(v_p) - alpha.cross(r_p_c2) - w_.cross(w_.cross(r_p_c2)); //the last term of (41)
 
-      if( nonholoutput(0) > 10 ){   //vd
+      if( nonholoutput(0) > 10 ){   // vd
         nonholoutput(0) = 10;
       }
 
@@ -306,6 +306,10 @@ int main(int argc, char **argv){
       feedforward.z = w_d_dot;
 
       force.pose.position.x = FL_des(0);
+      /* use "position" element to store force message -> lee_position_controller.cpp line 133
+         *acceleration =  -command_trajectory_.position_W/ vehicle_parameters_.mass_
+         - vehicle_parameters_.gravity_ * e_3 + Eigen::Vector3d(0,0,0) ;
+      */
       force.pose.position.y = FL_des(1);
       force.pose.position.z = FL_des(2);
      }

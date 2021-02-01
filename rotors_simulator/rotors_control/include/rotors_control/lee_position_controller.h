@@ -76,6 +76,7 @@ class LeePositionController {
   Eigen::Vector3d normalized_attitude_gain_;
   Eigen::Vector3d normalized_angular_rate_gain_;
   Eigen::MatrixX4d angular_acc_to_rotor_velocities_;
+  //is a partially dynamic-size (fixed-size) matrix of double (Matrix<double, Dynamic, 4>)
 
   mav_msgs::EigenTrajectoryPoint command_trajectory_;
   EigenOdometry odometry_;

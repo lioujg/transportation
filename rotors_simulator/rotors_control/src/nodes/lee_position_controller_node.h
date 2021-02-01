@@ -61,9 +61,10 @@ class LeePositionControllerNode {
   ros::Subscriber cmd_pose_sub_;
   ros::Subscriber odometry_sub_;
 
+  // publisher
   ros::Publisher motor_velocity_reference_pub_;
 
-  mav_msgs::EigenTrajectoryPointDeque commands_;
+  mav_msgs::EigenTrajectoryPointDeque commands_;        //initial
   std::deque<ros::Duration> command_waiting_times_;
   ros::Timer command_timer_;
 

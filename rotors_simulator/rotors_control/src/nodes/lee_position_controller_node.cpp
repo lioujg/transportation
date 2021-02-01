@@ -28,8 +28,8 @@
 namespace rotors_control {
 
 LeePositionControllerNode::LeePositionControllerNode(
-  const ros::NodeHandle& nh, const ros::NodeHandle& private_nh)
-  :nh_(nh),
+  const ros::NodeHandle& nh, const ros::NodeHandle& private_nh) //constructor
+  :nh_(nh), //initialize parameters
    private_nh_(private_nh){
   InitializeParams();
 
@@ -51,7 +51,9 @@ LeePositionControllerNode::LeePositionControllerNode(
                                   true, false);
 }
 
-LeePositionControllerNode::~LeePositionControllerNode() { }
+//write outside of the class
+
+LeePositionControllerNode::~LeePositionControllerNode() { }//deconstructor
 
 void LeePositionControllerNode::InitializeParams() {
 
@@ -99,7 +101,7 @@ void LeePositionControllerNode::Publish() {
 }
 
 void LeePositionControllerNode::CommandPoseCallback(
-    const geometry_msgs::PoseStampedConstPtr& pose_msg) {
+    const geometry_msgs::PoseStampedConstPtr& pose_msg) {       // geo force
   // Clear all pending commands.
   command_timer_.stop();
   commands_.clear();
@@ -108,6 +110,8 @@ void LeePositionControllerNode::CommandPoseCallback(
   mav_msgs::EigenTrajectoryPoint eigen_reference;
   //put pose_msg data into eigen_reference
   mav_msgs::eigenTrajectoryPointFromPoseMsg(*pose_msg, &eigen_reference);
+  // http://docs.ros.org/en/jade/api/mav_msgs/html/conversions_8h_source.html line:156
+
   commands_.push_front(eigen_reference);
   //change the pose_cmd to force_cmd.
   lee_position_controller_.SetTrajectoryPoint(commands_.front());
@@ -121,7 +125,7 @@ void LeePositionControllerNode::MultiDofJointTrajectoryCallback(
   commands_.clear();
   command_waiting_times_.clear();
 
-  const size_t n_commands = msg->points.size();
+  const size_t n_commands = msg->points.size(); //size_t is unsigned int/long
 
   if(n_commands < 1){
     ROS_WARN_STREAM("Got MultiDOFJointTrajectory message, but message has no points.");
@@ -134,6 +138,11 @@ void LeePositionControllerNode::MultiDofJointTrajectoryCallback(
 
   for (size_t i = 1; i < n_commands; ++i) {
     const trajectory_msgs::MultiDOFJointTrajectoryPoint& reference_before = msg->points[i-1];
+    /* reference_before's type is trajectory_msgs::MultiDOFJointTrajectoryPoint
+     * as msg->points[i-1], and they share the same memory address. So, you can say that reference_before
+     * is a nickname of msg->points[i-1]. You can replace reference_before with msg->points[i-1] below,
+     * and there is no different between these two situation.*/
+
     const trajectory_msgs::MultiDOFJointTrajectoryPoint& current_reference = msg->points[i];
 
     mav_msgs::eigenTrajectoryPointFromMsg(current_reference, &eigen_reference);
@@ -184,6 +193,7 @@ void LeePositionControllerNode::OdometryCallback(const nav_msgs::OdometryConstPt
 
   // Todo(ffurrer): Do this in the conversions header.
   mav_msgs::ActuatorsPtr actuator_msg(new mav_msgs::Actuators);
+  //An object actuator_msg belongs to class mav_msgs::ActuatorsPtr. And then new a pointer which type is mav_msgs::Actuators to initialize this object.
 
   actuator_msg->angular_velocities.clear();
   for (int i = 0; i < ref_rotor_velocities.size(); i++)
