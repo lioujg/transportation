@@ -61,16 +61,7 @@ void imu1_cb(const sensor_msgs::Imu::ConstPtr& msg){
   w = imu_data.orientation.w;
   tf::Quaternion Q(x, y, z, w);
   tf::Matrix3x3(Q).getRPY(payload_roll, payload_pitch, payload_yaw);
-  //get raw pitch yaw
 
-//<<<<<<< HEAD
-//  payload_Rotation << w*w+x*x-y*y-z*z ,     2*x*y-2*w*z ,     2*x*z+2*w*y,
-//                          2*x*y+2*w*z , w*w-x*x+y*y-z*z ,     2*y*z-2*w*x,
-//                          2*x*z-2*w*y ,     2*y*z+2*w*x , w*w-x*x-y*y+z*z;
-  //use imu_data to calculate rotation matrix(body frame to world frame)
-
-//=======
-//>>>>>>> bitch/main
   R_pl_B << cos(payload_yaw), sin(payload_yaw),   0,
            -sin(payload_yaw), cos(payload_yaw),   0,
                            0,                0,   1;
@@ -85,8 +76,7 @@ void imu1_cb(const sensor_msgs::Imu::ConstPtr& msg){
 
 void est_vel_cb(const geometry_msgs::Point::ConstPtr& msg){
   Eigen::Vector3d vc1 = Eigen::Vector3d(msg->x, msg->y, msg->z);
-  Eigen::Vector3d r_c1p = Eigen::Vector3d(-0.5, 0.0, 0.0);
-  v_p = R_pl_B*vc1; // + w_.cross(r_c1p);
+  v_p = R_pl_B*vc1;
 }
 
 void pc2_cb(const geometry_msgs::Point::ConstPtr& msg){
@@ -127,12 +117,12 @@ Eigen::Vector3d nonholonomic_output(double x_r, double y_r, double theta_r, doub
   err_state << x_r - pc2_est(0), y_r - pc2_est(1), theta_r - payload_yaw; // +(PI/2);(5)(6)
   err_state_B = R_pl_B * err_state;
 
-  x_e = err_state_B(0);  //err_state_B.norm();
-  y_e = err_state_B(1);  //err_state_B.norm();
+  x_e = err_state_B(0);
+  y_e = err_state_B(1);
   theta_e = err_state(2);
 
-  double vd = v_r*cos(theta_e) + 1.0*x_e;   //(43) k1
-  double w_d = w_r + v_r*5.0*y_e + 3.0*sin(theta_e);    //k2 k3
+  double vd = v_r*cos(theta_e) + k1*x_e;   //(43) k1
+  double w_d = w_r + v_r*k2*y_e + k3*sin(theta_e);    //k2 k3
 
   output << vd, w_d, 0;
   return output;
@@ -144,25 +134,24 @@ int main(int argc, char **argv){
   ros::NodeHandle nh;
 
   ros::Publisher feedforward_pub = nh.advertise<geometry_msgs::Point>("/feedforward",2);
-  ros::Publisher desired_pose_pub = nh.advertise<geometry_msgs::Point>("/drone1/desired_position",2);//QP
+  ros::Publisher desired_pose_pub = nh.advertise<geometry_msgs::Point>("/drone1/desired_position",2);
   ros::Publisher desired_force_pub = nh.advertise<geometry_msgs::Point>("/desired_force",2);
   ros::Publisher desired_velocity_pub = nh.advertise<geometry_msgs::Point>("/desired_velocity",2);
   ros::Publisher traj_pub = nh.advertise<geometry_msgs::PoseStamped>("/firefly1/command/pose",2);
-
   ros::Subscriber odom_sub = nh.subscribe<nav_msgs::Odometry>("/firefly1/odometry_sensor1/odometry", 3,odom_cb);
   ros::Subscriber est_vel_sub = nh.subscribe<geometry_msgs::Point>("est_vel",3,est_vel_cb);
   ros::Subscriber imu1_sub = nh.subscribe("/payload/IMU1",2,imu1_cb);
   ros::Subscriber pc2_sub = nh.subscribe("pointpc2",2,pc2_cb);
   ros::Subscriber eta_sub = nh.subscribe("pointvc2",2,eta_cb);
 
-  ros::Rate loop_rate(50.0);    //frequency
+  ros::Rate loop_rate(50.0);
   nh.setParam("/start",false);
   geometry_msgs::PoseStamped force;
 
   //planning
   qptrajectory plan;
   path_def path;
-  trajectory_profile p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11;
+  trajectory_profile p1,p2,p3,p4,p5,p6,p7,p8;
   std::vector<trajectory_profile> data;
 
     p1.pos << 1,1,0;
@@ -205,7 +194,7 @@ int main(int argc, char **argv){
     p8.acc << 0,0,0;
     p8.yaw = 0;
 
-  path.push_back(segments(p1,p2,16.0));//16sec
+  path.push_back(segments(p1,p2,12.0));
   path.push_back(segments(p2,p3,16.0));
   path.push_back(segments(p3,p4,16.0));
   path.push_back(segments(p4,p5,16.0));
@@ -214,11 +203,11 @@ int main(int argc, char **argv){
   path.push_back(segments(p7,p8,16.0));
   data = plan.get_profile(path,path.size(),0.02);
 
-  desired_pose.pose.position.x = 0.9;//?
+  desired_pose.pose.position.x = 0.9;
   desired_pose.pose.position.y = 0.0;
   desired_pose.pose.position.z = 1.3;
 
-  while(ros::ok()){     //loop (spinOnce)
+  while(ros::ok()){
 
     nh.getParam("/start",flag);
 
@@ -253,7 +242,7 @@ int main(int argc, char **argv){
       alpha << 0, 0, (w_(2) - last_w)/0.02;
       last_w = w_(2);
 
-      double w_r = (ay*vx - ax*vy)/(vx*vx + vy*vy); //(theta_r - last_theta_r) /(0.02) ???;
+      double w_r = (ay*vx - ax*vy)/(vx*vx + vy*vy); //(theta_r - last_theta_r) /(0.02) ;
       double vr = sqrt(vx*vx + vy*vy);
 
       Eigen::Vector3d nonholoutput = nonholonomic_output(vir_x, vir_y, theta_r, vr, w_r);   //vd, w_d, 0
@@ -269,7 +258,7 @@ int main(int argc, char **argv){
 
       nonlinearterm = w_.cross(v_p) - alpha.cross(r_p_c2) - w_.cross(w_.cross(r_p_c2)); //the last term of (41)
 
-      if( nonholoutput(0) > 10 ){   // vd
+      if( nonholoutput(0) > 10 ){   //vd
         nonholoutput(0) = 10;
       }
 
@@ -278,7 +267,7 @@ int main(int argc, char **argv){
 
       //(41)(42) separately
       tmp << kv * (nonholoutput(0) - v_w_eta(0)) + x_e + nonlinearterm(0) + vd_dot,
-             kw * (nonholoutput(1) - v_w_eta(2)) + sin(theta_e)/k2 + w_d_dot,   //+0    ffy is close to zero.
+             kw * (nonholoutput(1) - v_w_eta(1)) + sin(theta_e)/k2 + w_d_dot,   //ffy is close to zero.
              0;
 
       Eigen::Matrix3d M;

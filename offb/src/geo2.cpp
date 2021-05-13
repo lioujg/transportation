@@ -1,3 +1,4 @@
+
 #include <ros/ros.h>
 #include <geometric_controller.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -21,10 +22,11 @@
 #include <geometric_controller.h>
 #include <queue>
 #include <nav_msgs/Odometry.h>
+#include <geometry_msgs/Pose2D.h>
 
 #define length 0.18
 #define PI 3.1415926
-double mp = 0.5, g = 9.8, kd = mp*g/(2*length), bd = 2.0, mF = 1.0, Md = 1.5;
+double mp = 0.5, g = 9.8, kd = mp*g/(2*length), bd = 2.0, mF = 1.0, Md = 1.5, kf1 = 2.0;
 
 geometry_msgs::PoseStamped desired_pose;
 Eigen::Vector3d pose, vel, ang;
@@ -41,6 +43,8 @@ Eigen::Matrix3d uav_rotation;
 geometry_msgs::PoseStamped force;
 geometry_msgs::Point est_force;
 geometry_msgs::Point data;
+geometry_msgs::Pose2D debug_data;
+
 
 Eigen::Matrix3d payload_rotation_truth;
 geometry_msgs::Point trigger;
@@ -53,7 +57,7 @@ void model_cb(const gazebo_msgs::LinkStates::ConstPtr& msg){
 
     for(unsigned int i=0; i<links.name.size(); i++){
 
-      if (links.name[i].compare("payload::payload_rec_g_box") == 0 ){   //links.name = payload::payload_rec_g_box
+      if (links.name[i].compare("payload::payload_rec_g_box") == 0 ){
         Eigen::Vector3d vec;
         double w,x,y,z;
 
@@ -101,18 +105,23 @@ void est_force_cb(const geometry_msgs::Point::ConstPtr& msg){
   FF_I << est_force.x, est_force.y, est_force.z;
 
   p_F_c2 = pose - uav_rotation * Eigen::Vector3d(0, 0, 0.05);  // offset x from uav to connector
-  p_c2 = p_F_c2 + (FF_I/FF_I.norm()) * length;  // (38) pc2 version "-"??   the estimated force is the payload pull the UAV
+  p_c2 = p_F_c2 + (FF_I/FF_I.norm()) * length;
 
-  payload_yaw = atan2(tmpy - last_tmp_y, tmpx - last_tmp_x);        //(4)
-  // tmpy is y-position of c2
+  //payload_yaw = atan2( tmpy - last_tmp_y, tmpx - last_tmp_x);
+
 
   if(payload_yaw < 0){
     payload_yaw += 2*PI;
   }
 
+  debug_data.theta = payload_yaw * 180 / PI;
+  // debug_data.theta = debug_data.theta - 0.2;
+  debug_data.x = tmpx;
+  debug_data.y = tmpy;
+
   payload_Rotation << cos(payload_yaw),  -sin(payload_yaw),   0,
                       sin(payload_yaw),   cos(payload_yaw),   0,
-                                     0,                  0,   1;    //inertial to body(?
+                                     0,                  0,   1;
 
   //change the force from inertial frame to body.
   if((count_ %1 == 0) && (pos_x_buffer.size()>7)){
@@ -130,7 +139,7 @@ void est_force_cb(const geometry_msgs::Point::ConstPtr& msg){
          poly_t(0.04).transpose(),
          poly_t(0.06).transpose(),
          poly_t(0.08).transpose(),
-         poly_t(0.1).transpose(),
+         poly_t(0.10).transpose(),
          poly_t(0.12).transpose();
 
     double t1,t2,t3,t4,t5,t6,t7;
@@ -151,7 +160,7 @@ void est_force_cb(const geometry_msgs::Point::ConstPtr& msg){
     pos_x_buffer.pop();
 
     tx << t1, t2, t3, t4, t5, t6, t7;
-    coeff_x = (w.transpose() * w).inverse() * w.transpose()*tx; // Calculate the pseude-inverse of w
+    coeff_x = (w.transpose() * w).inverse() * w.transpose()*tx;
 
     t1 = pos_y_buffer.front();
     pos_y_buffer.pop();
@@ -171,11 +180,17 @@ void est_force_cb(const geometry_msgs::Point::ConstPtr& msg){
     ty << t1, t2, t3, t4, t5, t6, t7;
     coeff_y = (w.transpose() * w).inverse() * w.transpose()* ty;
 
-    double t = 0.14;
-    tmpx = coeff_x(0)*1 + coeff_x(1)*t + coeff_x(2)*t*t + coeff_x(3)*t*t*t + coeff_x(4)*t*t*t*t + coeff_x(5)*t*t*t*t*t;
-    tmpy = coeff_y(0)*1 + coeff_y(1)*t + coeff_y(2)*t*t + coeff_y(3)*t*t*t + coeff_y(4)*t*t*t*t + coeff_y(5)*t*t*t*t*t;
-    tmpx = 0.7*last_tmp_x + 0.3*tmpx;    // filter
-    tmpy = 0.7*last_tmp_y + 0.3*tmpy;
+    // double t = 0.14;
+    // tmpx = coeff_x(0)*1 + coeff_x(1)*t + coeff_x(2)*t*t + coeff_x(3)*t*t*t + coeff_x(4)*t*t*t*t + coeff_x(5)*t*t*t*t*t;
+    // tmpy = coeff_y(0)*1 + coeff_y(1)*t + coeff_y(2)*t*t + coeff_y(3)*t*t*t + coeff_y(4)*t*t*t*t + coeff_y(5)*t*t*t*t*t;
+    // tmpx = 0.7*last_tmp_x + 0.3*tmpx;    // filter
+    // tmpy = 0.7*last_tmp_y + 0.3*tmpy;
+
+    tmpx = p_c2(0);
+    tmpy = p_c2(1);
+
+    payload_yaw = atan2( tmpy - last_tmp_y, tmpx - last_tmp_x);
+
 
     double dt = ros::Time::now().toSec() - last_time;
     last_time = ros::Time::now().toSec();
@@ -190,20 +205,19 @@ void est_force_cb(const geometry_msgs::Point::ConstPtr& msg){
 
     Eigen::Vector3d offset_b = payload_Rotation*(FF_I/FF_I.norm()) * length;
 
-    r = (v*v*v)/fabs(vx*ay - vy*ax);    //The absolute value of vx*ay - vy*ax
+    r = (v*v*v)/fabs(vx*ay - vy*ax);
     an = (v*v)/r;
     Fn = mp/2 * an;
 
-    double fy = FF_B(1);
-    double dy = offset_b(1);
+    //double fy = FF_B(1);
+    double dy = -offset_b(1);
 
     if((atan2(vy,vx) - atan2(last_vy,last_vx))<0){
       //determine wheather the motion is CCW or CW, if CW Fn and dy is negative.
       Fn = Fn * -1.0;
     }
 
-    command = mF*(bd*(-vb(1)) - kd*dy)/Md - fy + Fn;    //desired y is 0
-    //command = mF*(bd*(-vb(1)) - kd*dy)/Md + Fn;    //desired y is 0
+    command = mF*(bd*-vb(1) - kd*dy)/Md + Fn;
 
     kappa.x = r;
     kappa.y = Fn;
@@ -247,7 +261,7 @@ void odom_cb(const nav_msgs::Odometry::ConstPtr& msg){
 
 geometry_msgs::Point force2;
 Eigen::Vector3d a_, b_;
-void force2_cb(const geometry_msgs::WrenchStamped::ConstPtr& msg){  //??
+void force2_cb(const geometry_msgs::WrenchStamped::ConstPtr& msg){
   b_ << msg -> wrench.force.x, msg -> wrench.force.y, msg -> wrench.force.z;
   a_ = payload_rotation_truth * b_;
 
@@ -270,14 +284,15 @@ int main(int argc, char **argv){
   ros::Publisher trigger_pub = nh.advertise<geometry_msgs::Point>("/follower_trigger",2);
   ros::Publisher radius_pub = nh.advertise<geometry_msgs::Point>("/kappa",2);
   ros::Publisher force2_pub = nh.advertise<geometry_msgs::Point>("/force2",2);
+  ros::Publisher yaw_pub = nh.advertise<geometry_msgs::Pose2D>("/fucking_yaw",2);
 
   nh.setParam("/start2",false);
   nh.setParam("/force_control",false);
 
+  debug_data.x = -0.2f;
+
   triggered = false;
   ros::Rate loop_rate(50.0);
-
-  Eigen::Vector4d output;
 
   desired_pose.pose.position.x = -0.3;
   desired_pose.pose.position.y = 0.0;
@@ -288,23 +303,23 @@ int main(int argc, char **argv){
     nh.getParam("/force_control",force_control);
 
     double ft = sqrt(FF_I(0)*FF_I(0) + FF_I(1)*FF_I(1));
-    if((ft>0.3)){       //(45)
+    if((ft>0.3)){
       triggered = true;
     }
     else if((triggered)&&((ft<0.3)&&(ft>0.2))){
       triggered = true;
     }
-    else{       //(46)
+    else{
       triggered = false;
     }
 
-    if((triggered) && (force_control)){     //(47)upper
+    if((triggered) && (force_control)){
       Eigen::Vector3d a, ab;
 
       FF_B = payload_Rotation * FF_I;
       vb = payload_Rotation * vel;
 
-      ab <<                           (0 - vb(0)) + (FF_B(0))/3.0,      //FF_B is estimated
+      ab <<                              kf1*-vb(0) + FF_B(0),
                                                command,
             5.0*(desired_pose.pose.position.z - pose(2)) + 2.0*(0 - vel(2)) + 0.5*mp*g;
       a = payload_Rotation.transpose()*ab;
@@ -317,7 +332,7 @@ int main(int argc, char **argv){
 
       trigger.x = 1;
     }
-    else{       //(47)lower
+    else{
       force.pose.position.x = 3*(desired_pose.pose.position.x - pose(0)) + 1*(0 - vel(0));
       force.pose.position.y = 3*(desired_pose.pose.position.y - pose(1)) + 1*(0 - vel(1));
       force.pose.position.z = 3*(desired_pose.pose.position.z - pose(2)) + 1*(0 - vel(2)) + 0.5*mp*g;
@@ -325,13 +340,14 @@ int main(int argc, char **argv){
       trigger.x = 0;
     }
 
-    trigger.y = ft; //magnitude of force
+    trigger.y = ft;
 
     traj_pub.publish(force);
     trigger_pub.publish(trigger);
     force2_pub.publish(force2);
     radius_pub.publish(kappa);
     vc2_pub.publish(data);
+    yaw_pub.publish(debug_data);
 
     ros::spinOnce();
     loop_rate.sleep();
