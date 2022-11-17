@@ -110,11 +110,9 @@ void est_force_cb(const geometry_msgs::Point::ConstPtr& msg){
   //payload_yaw = atan2( tmpy - last_tmp_y, tmpx - last_tmp_x);
 
 
-  if(payload_yaw < 0){
-    payload_yaw += 2*PI;
-  }
+  
 
-  debug_data.theta = payload_yaw * 180 / PI;
+  debug_data.theta = payload_yaw;// * 180 / PI;
   // debug_data.theta = debug_data.theta - 0.2;
   debug_data.x = tmpx;
   debug_data.y = tmpy;
@@ -190,6 +188,10 @@ void est_force_cb(const geometry_msgs::Point::ConstPtr& msg){
     tmpy = p_c2(1);
 
     payload_yaw = atan2( tmpy - last_tmp_y, tmpx - last_tmp_x);
+
+    if(payload_yaw < 0){
+    payload_yaw += 2*PI;
+    }
 
 
     double dt = ros::Time::now().toSec() - last_time;

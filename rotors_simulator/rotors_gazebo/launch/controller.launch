@@ -43,6 +43,22 @@
 </node>
 
 
+<!--<node
+    pkg="offb"
+    type="geo_plan"
+    name="geo_plan"
+    output="screen">
+</node>
+
+<node
+    pkg="offb"
+    type="geo2_new"
+    name="geo2_new"
+    output="screen">
+</node>
+-->
+
+
 
 
 </launch>

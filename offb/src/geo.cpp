@@ -153,7 +153,55 @@ int main(int argc, char **argv){
   path_def path;
   trajectory_profile p1,p2,p3,p4,p5,p6,p7,p8;
   std::vector<trajectory_profile> data;
+#if 1
+    p1.pos << 0,0,0;
+    p1.vel << 0,0,0;
+    p1.acc << 0,0,0;
+    p1.yaw = 0;
 
+    p2.pos << 3/2,5/2,0;
+    p2.vel << 0,0,0;
+    p2.acc << 0,0,0;
+    p2.yaw = 0;
+
+    p3.pos << 12/2,0,0;
+    p3.vel << 0,0,0;
+    p3.acc << 0,0,0;
+    p3.yaw = 0;
+
+    p4.pos << 3/2,-5/2,0;
+    p4.vel << 0,0,0;
+    p4.acc << 0,0,0;
+    p4.yaw = 0;
+
+    p5.pos << -3/2,5/2,0;
+    p5.vel << 0,0,0;
+    p5.acc << 0,0,0;
+    p5.yaw = 0;
+
+    p6.pos << -12/2,0,0;
+    p6.vel << 0,0,0;
+    p6.acc << 0,0,0;
+    p6.yaw = 0;
+
+    p7.pos << -3/2,-5/2,0;
+    p7.vel << 0,0,0;
+    p7.acc << 0,0,0;
+    p7.yaw = 0;
+
+    p8.pos << 0,0,0;
+    p8.vel << 0,0,0;
+    p8.acc << 0,0,0;
+    p8.yaw = 0;
+
+  path.push_back(segments(p1,p2,8.0));
+  path.push_back(segments(p2,p3,8.0));
+  path.push_back(segments(p3,p4,8.0));
+  path.push_back(segments(p4,p5,8.0));
+  path.push_back(segments(p5,p6,8.0));
+  path.push_back(segments(p6,p7,8.0));
+  path.push_back(segments(p7,p8,8.0));
+#else
     p1.pos << 1,1,0;
     p1.vel << 0,0,0;
     p1.acc << 0,0,0;
@@ -194,13 +242,14 @@ int main(int argc, char **argv){
     p8.acc << 0,0,0;
     p8.yaw = 0;
 
-  path.push_back(segments(p1,p2,12.0));
+  path.push_back(segments(p1,p2,16.0));
   path.push_back(segments(p2,p3,16.0));
   path.push_back(segments(p3,p4,16.0));
   path.push_back(segments(p4,p5,16.0));
   path.push_back(segments(p5,p6,16.0));
   path.push_back(segments(p6,p7,16.0));
   path.push_back(segments(p7,p8,16.0));
+#endif
   data = plan.get_profile(path,path.size(),0.02);
 
   desired_pose.pose.position.x = 0.9;

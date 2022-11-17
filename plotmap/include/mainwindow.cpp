@@ -122,24 +122,30 @@ void MainWindow::qpsolve_button(){
     qp_curve_data.clear();
 
 
-    //std::cout << "start   " << path_vec[0].b_c.pos.transpose() <<std::endl;
+    std::cout << "start   " << path_vec[0].b_c.pos.transpose() <<std::endl;
     if(path_vec.size()>0){
         data = plan.get_profile(path_vec, path_vec.size(), 0.05);
     }
 
     std::cout << "profile count" << data.size()<<std::endl;
     for(unsigned int i=30;i< (data.size()-10);i++){
+        std::cout << "EGZH" << i << std::endl;
 
         qp_curve_data.push_back(QCPCurveData(i,data[i].pos(0),data[i].pos(1)));
+
+        std::cout << "EGZH" << i+1 << std::endl;
 
         ui->vel_plot->graph(0)->addData(i*0.02 , data[i].vel(0));
         ui->vel_plot->graph(1)->addData(i*0.02 , data[i].vel(1));
         //std::cout << data[i].pos.transpose()<<std::endl;
 
+
         geometry_msgs::Transform pos;
         geometry_msgs::Twist vel,acc;
         pos.translation.x = data[i].pos(0);
         pos.translation.y = data[i].pos(1);
+
+        std::cout << "EGZH" << i+2 << std::endl;
 
         vel.linear.x = data[i].vel(0);
         vel.linear.y = data[i].vel(1);
@@ -147,10 +153,15 @@ void MainWindow::qpsolve_button(){
         acc.linear.x = data[i].acc(0);
         acc.linear.y = data[i].acc(1);
 
+        std::cout << "EGZH" << i+3 << std::endl;
+
         traj.transforms.push_back(pos);
         traj.velocities.push_back(vel);
         traj.accelerations.push_back(acc);
+
+        std::cout << "EGZH" << i+4 << std::endl;
     }
+    std::cout << "EGZH N" << std::endl;
 
     data.clear();
     path_curve->data()->clear();
